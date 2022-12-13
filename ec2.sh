@@ -16,10 +16,10 @@ SUBNET_CIDR=("10.0.1.0/24" "10.0.2.0/24")
 AVAILABILITY_ZONE=("ap-south-1a" "ap-south-1b")
 
 #Add names of subnets
-SUBNET_NAME=("web-public" "db-private")
+SUBNET_NAME=("mumbai-subnet" "europe-subnet")
 
 #Specify number of piublic subnets
-PUBLIC_SUBNET_COUNT=1
+PUBLIC_SUBNET_COUNT=2
 
 #Name of key pair; If using existing keypair, refer to the function call `create_key_pair` in the bottom of the script
 KEY_PAIR=my_new_key
@@ -40,7 +40,10 @@ INGRESS_PORT=("22" "80" "443" "3306")
 AMI_ID=ami-074dc0a6f6c764218
 
 #Name tags for EC2 instances, names of instances with public IP should be first 
-EC2_NAME=("WebServer" "DBServer")
+EC2_NAME=("Mumbai-Server" "Europe-Server")
+
+#Specify user-data files for each instance
+USERDATA=("userdata1.sh" "userdata2.sh")
 
 #Name tag for EC2 root volume
 VOL_NAME=rootVol-ec2FromCli
@@ -57,6 +60,13 @@ function create_vpc(){
     echo "Creating VPC $VPC_NAME"
     VPC_ID=$(aws ec2 create-vpc --cidr-block $VPC_CIDR --query Vpc.VpcId --output text --region=$REGION \
         --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value="'"$VPC_NAME"'"}]')
+    
+    #Enable DNS hostname and DNS support
+    #You cannot modify the DNS resolution and DNS hostnames attributes in the same request
+    #Use separate requests for each attribute. 
+    #You can only enable DNS hostnames if you've enabled DNS support
+    aws ec2 modify-vpc-attribute --vpc-id $VPC_ID --enable-dns-support
+    aws ec2 modify-vpc-attribute --vpc-id $VPC_ID --enable-dns-hostnames 
     echo "VPC $VPC_NAME created"
 }
 
@@ -146,12 +156,14 @@ function create_ec2(){
         aws ec2 run-instances --image-id $AMI_ID \
         --count 1 --instance-type t2.micro --key-name $KEY_PAIR \
         --security-group-ids $SG_ID --subnet-id ${SUBNET_IDS[$i]} \
+        --user-data file://${USERDATA[$i]} \
         --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value="'"${EC2_NAME[$i]}"'"}]' \
-        'ResourceType=volume,Tags=[{Key=Name,Value="'"$VOL_NAME"'"}]'
+        'ResourceType=volume,Tags=[{Key=Name,Value="'"${EC2_NAME[$i]}_$VOL_NAME"'"}]'
         echo "EC2 instance ${EC2_NAME[$i]} created"
         done 
     echo "EC2 instance creation complete"
 }
+
 
 
 
